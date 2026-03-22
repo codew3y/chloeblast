@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLOCK BLAST</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a1a;
+    --grid-bg: #0f0f2a;
+    --grid-line: #1a1a3a;
+    --accent: #ff3cac;
+    --accent2: #00f5d4;
+    --accent3: #ffe34d;
+    --text: #e8e8ff;
+    --glow-pink: 0 0 20px #ff3cac88, 0 0 40px #ff3cac44;
+    --glow-cyan: 0 0 20px #00f5d488, 0 0 40px #00f5d444;
+    --cell: 44px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 20px 10px;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse at 20% 10%, #1a003366 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 90%, #00153366 0%, transparent 50%);
+  }
+
+  /* Scanlines overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.07) 2px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3.5rem;
+    letter-spacing: 6px;
+    background: linear-gradient(135deg, #ff3cac, #784ba0, #00f5d4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+    filter: drop-shadow(0 0 18px #ff3cac88);
+    line-height: 1;
+  }
+
+  .tagline {
+    font-size: 0.8rem;
+    letter-spacing: 4px;
+    color: var(--accent2);
+    opacity: 0.7;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .game-wrap {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* SCORE PANEL */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 130px;
+  }
+
+  .score-box {
+    background: var(--grid-bg);
+    border: 1px solid #ffffff18;
+    border-radius: 12px;
+    padding: 14px 18px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .score-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  .score-label {
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    opacity: 0.8;
+  }
+
+  .score-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2rem;
+    letter-spacing: 2px;
+    color: #fff;
+    line-height: 1;
+    margin-top: 2px;
+  }
+
+  .best-box .score-box::before {
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+  }
+  .best-box .score-label { color: var(--accent2); }
+
+  /* MAIN GRID */
+  .grid-container {
+    position: relative;
+  }
+
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(8, var(--cell));
+    grid-template-rows: repeat(8, var(--cell));
+    gap: 3px;
+    background: var(--grid-bg);
+    padding: 10px;
+    border-radius: 16px;
+    border: 1px solid #ffffff12;
+    box-shadow:
+      0 0 40px #00000088,
+      inset 0 0 30px #00000055;
+  }
+
+  .cell {
+    width: var(--cell);
+    height: var(--cell);
+    border-radius: 6px;
+    background: var(--grid-line);
+    transition: background 0.1s, transform 0.1s, box-shadow 0.1s;
+    cursor: default;
+    position: relative;
+  }
+
+  .cell.filled {
+    border-radius: 6px;
+  }
+
+  .cell.highlight {
+    background: rgba(255, 255, 255, 0.15) !important;
+    transform: scale(0.95);
+  }
+
+  .cell.invalid-highlight {
+    background: rgba(255, 50, 50, 0.25) !important;
+  }
+
+  .cell.clearing {
+    animation: cellClear 0.4s ease forwards;
+  }
+
+  @keyframes cellClear {
+    0% { transform: scale(1); opacity: 1; }
+    40% { transform: scale(1.2); opacity: 1; filter: brightness(2); }
+    100% { transform: scale(0); opacity: 0; }
+  }
+
+  .cell.pop-in {
+    animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  }
+
+  @keyframes popIn {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* PIECES TRAY */
+  .tray {
+    background: var(--grid-bg);
+    border: 1px solid #ffffff12;
+    border-radius: 16px;
+    padding: 16px;
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    align-items: center;
+    margin-top: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .tray::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent3), transparent);
+  }
+
+  .piece-slot {
+    width: 88px;
+    height: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    position: relative;
+    transition: transform 0.2s;
+    user-select: none;
+  }
+
+  .piece-slot:active { cursor: grabbing; }
+
+  .piece-slot:not(.used):hover {
+    transform: scale(1.1);
+    filter: brightness(1.2);
+  }
+
+  .piece-slot.used {
+    opacity: 0.2;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .piece-slot.dragging {
+    opacity: 0.4;
+  }
+
+  .piece-grid {
+    display: grid;
+    gap: 2px;
+  }
+
+  .piece-cell {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+  }
+
+  /* Floating drag piece */
+  #drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 999;
+    display: none;
+    transform: translate(-50%, -50%) scale(1.15);
+    filter: drop-shadow(0 8px 24px #00000088);
+    transition: none;
+  }
+
+  #drag-ghost .piece-cell {
+    width: 36px;
+    height: 36px;
+    border-radius: 5px;
+  }
+
+  #drag-ghost .piece-grid {
+    gap: 3px;
+  }
+
+  /* COMBO + SCORE POPUP */
+  .score-popup {
+    position: absolute;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    color: var(--accent3);
+    pointer-events: none;
+    text-shadow: 0 0 20px #ffe34d;
+    z-index: 50;
+    animation: floatUp 1s ease forwards;
+    white-space: nowrap;
+  }
+
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-80px) scale(1.3); }
+  }
+
+  .combo-popup {
+    color: var(--accent);
+    text-shadow: var(--glow-pink);
+    font-size: 1.5rem;
+  }
+
+  /* GAME OVER */
+  #overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 5, 20, 0.88);
+    border-radius: 16px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    backdrop-filter: blur(6px);
+  }
+
+  #overlay.active {
+    display: flex;
+    animation: fadeIn 0.4s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .over-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    color: var(--accent);
+    letter-spacing: 6px;
+    text-shadow: var(--glow-pink);
+  }
+
+  .over-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    color: #fff;
+    margin: 8px 0 20px;
+    letter-spacing: 3px;
+  }
+
+  .btn {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 3px;
+    padding: 12px 34px;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: transform 0.15s, filter 0.15s;
+    background: linear-gradient(135deg, #ff3cac, #784ba0);
+    color: #fff;
+    box-shadow: 0 4px 20px #ff3cac55;
+  }
+
+  .btn:hover {
+    transform: scale(1.07);
+    filter: brightness(1.2);
+  }
+
+  .btn:active { transform: scale(0.97); }
+
+  /* COMBO METER */
+  .combo-meter {
+    background: var(--grid-bg);
+    border: 1px solid #ffffff12;
+    border-radius: 12px;
+    padding: 10px 16px;
+    text-align: center;
+  }
+
+  .combo-label {
+    font-size: 0.6rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent3);
+    opacity: 0.8;
+  }
+
+  .combo-bar-wrap {
+    height: 8px;
+    background: #ffffff10;
+    border-radius: 4px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+
+  .combo-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent3), var(--accent));
+    border-radius: 4px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+
+  .combo-count {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    color: var(--accent3);
+    line-height: 1;
+    margin-top: 2px;
+  }
+
+  /* COLOR PALETTE for blocks */
+  .c0 { background: #ff3cac; box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 0 8px #ff3cac66; }
+  .c1 { background: #00f5d4; box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 0 8px #00f5d466; }
+  .c2 { background: #ffe34d; box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 0 8px #ffe34d66; }
+  .c3 { background: #7c5cbf; box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 0 8px #7c5cbf66; }
+  .c4 { background: #ff7043; box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 0 8px #ff704366; }
+  .c5 { background: #29b6f6; box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 0 8px #29b6f666; }
+  .c6 { background: #a5d63f; box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 0 8px #a5d63f66; }
+
+  .instructions {
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    color: #ffffff40;
+    text-align: center;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CHLOE BLAST</h1>
+  <div class="tagline">drag &amp; drop · clear lines · beat your best</div>
+</header>
+
+<div class="game-wrap">
+  <!-- Left Panel -->
+  <div class="side-panel">
+    <div class="score-box">
+      <div class="score-label">Score</div>
+      <div class="score-value" id="score-display">0</div>
+    </div>
+    <div class="score-box best-box">
+      <div class="score-label">Best</div>
+      <div class="score-value" id="best-display">0</div>
+    </div>
+    <div class="combo-meter">
+      <div class="combo-label">Combo</div>
+      <div class="combo-count" id="combo-display">x1</div>
+      <div class="combo-bar-wrap">
+        <div class="combo-bar" id="combo-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid -->
+  <div>
+    <div class="grid-container">
+      <div id="grid"></div>
+      <div id="overlay">
+        <div class="over-title">GAME OVER</div>
+        <div class="over-score" id="over-score"></div>
+        <button class="btn" onclick="startGame()">PLAY AGAIN</button>
+      </div>
+    </div>
+
+    <!-- Piece Tray -->
+    <div class="tray">
+      <div class="piece-slot" id="slot-0"></div>
+      <div class="piece-slot" id="slot-1"></div>
+      <div class="piece-slot" id="slot-2"></div>
+    </div>
+    <div class="instructions">Drag pieces onto the grid · Fill rows or columns to clear them</div>
+  </div>
+</div>
+
+<!-- Ghost for dragging -->
+<div id="drag-ghost"><div class="piece-grid" id="ghost-grid"></div></div>
+
+<script>
+const ROWS = 8, COLS = 8;
+let board = [], score = 0, best = parseInt(localStorage.getItem('bb_best') || '0');
+let pieces = [null, null, null];
+let combo = 0;
+let dragPieceIdx = -1, dragOffsetRow = 0, dragOffsetCol = 0;
+let hoverCells = [];
+
+// ─── PIECE SHAPES ───────────────────────────────────────────────────────────
+const SHAPES = [
+  // 1x1
+  [[1]],
+  // 1x2
+  [[1,1]],
+  // 2x1
+  [[1],[1]],
+  // 1x3
+  [[1,1,1]],
+  // 3x1
+  [[1],[1],[1]],
+  // 1x4
+  [[1,1,1,1]],
+  // 4x1
+  [[1],[1],[1],[1]],
+  // 2x2
+  [[1,1],[1,1]],
+  // L shapes
+  [[1,0],[1,0],[1,1]],
+  [[0,1],[0,1],[1,1]],
+  [[1,1],[1,0],[1,0]],
+  [[1,1],[0,1],[0,1]],
+  // T shape
+  [[1,1,1],[0,1,0]],
+  [[0,1,0],[1,1,1]],
+  [[1,0],[1,1],[1,0]],
+  [[0,1],[1,1],[0,1]],
+  // S/Z
+  [[0,1,1],[1,1,0]],
+  [[1,1,0],[0,1,1]],
+  // 3x3
+  [[1,1,1],[1,0,0],[1,0,0]],
+  [[1,1,1],[0,0,1],[0,0,1]],
+  // 2x3
+  [[1,1],[1,1],[1,0]],
+  [[1,1],[1,1],[0,1]],
+];
+
+const COLORS = 7;
+function randColor() { return Math.floor(Math.random() * COLORS); }
+function randShape() { return SHAPES[Math.floor(Math.random() * SHAPES.length)]; }
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+function startGame() {
+  board = Array.from({length: ROWS}, () => Array(COLS).fill(-1));
+  score = 0; combo = 0;
+  document.getElementById('overlay').classList.remove('active');
+  updateScore();
+  buildGrid();
+  dealPieces();
+}
+
+function buildGrid() {
+  const g = document.getElementById('grid');
+  g.innerHTML = '';
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r; cell.dataset.c = c;
+      g.appendChild(cell);
+    }
+  }
+  renderBoard();
+}
+
+function renderBoard() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = getCell(r, c);
+      if (!cell) continue;
+      const v = board[r][c];
+      cell.className = 'cell' + (v >= 0 ? ' filled c' + v : '');
+    }
+  }
+}
+
+function getCell(r, c) {
+  return document.querySelector(`#grid .cell[data-r="${r}"][data-c="${c}"]`);
+}
+
+// ─── DEAL PIECES ─────────────────────────────────────────────────────────────
+function dealPieces() {
+  pieces = [
+    { shape: randShape(), color: randColor() },
+    { shape: randShape(), color: randColor() },
+    { shape: randShape(), color: randColor() },
+  ];
+  renderTray();
+  checkGameOver();
+}
+
+function renderTray() {
+  for (let i = 0; i < 3; i++) {
+    const slot = document.getElementById('slot-' + i);
+    slot.innerHTML = '';
+    slot.classList.remove('used', 'dragging');
+    if (!pieces[i]) { slot.classList.add('used'); continue; }
+    const pg = buildPieceGrid(pieces[i].shape, pieces[i].color, 18);
+    slot.appendChild(pg);
+    slot.onmousedown = (e) => startDrag(e, i);
+    slot.ontouchstart = (e) => startDrag(e, i);
+  }
+}
+
+function buildPieceGrid(shape, color, cellSize) {
+  const pg = document.createElement('div');
+  pg.className = 'piece-grid';
+  pg.style.gridTemplateColumns = `repeat(${shape[0].length}, ${cellSize}px)`;
+  pg.style.gridTemplateRows = `repeat(${shape.length}, ${cellSize}px)`;
+  for (let r = 0; r < shape.length; r++) {
+    for (let c = 0; c < shape[r].length; c++) {
+      const pc = document.createElement('div');
+      pc.className = 'piece-cell' + (shape[r][c] ? ' c' + color : '');
+      pc.style.width = cellSize + 'px';
+      pc.style.height = cellSize + 'px';
+      pc.style.background = shape[r][c] ? '' : 'transparent';
+      pc.style.boxShadow = shape[r][c] ? '' : 'none';
+      pg.appendChild(pc);
+    }
+  }
+  return pg;
+}
+
+// ─── DRAG ────────────────────────────────────────────────────────────────────
+let isDragging = false;
+
+function startDrag(e, idx) {
+  if (!pieces[idx]) return;
+  e.preventDefault();
+  dragPieceIdx = idx;
+  isDragging = true;
+
+  // Anchor to middle of piece
+  const shape = pieces[idx].shape;
+  dragOffsetRow = Math.floor(shape.length / 2);
+  dragOffsetCol = Math.floor(shape[0].length / 2);
+
+  const ghost = document.getElementById('drag-ghost');
+  const ghostGrid = document.getElementById('ghost-grid');
+  ghostGrid.innerHTML = '';
+  const pg = buildPieceGrid(shape, pieces[idx].color, 36);
+  ghostGrid.style.gridTemplateColumns = pg.style.gridTemplateColumns;
+  ghostGrid.style.gridTemplateRows = pg.style.gridTemplateRows;
+  while (pg.firstChild) ghostGrid.appendChild(pg.firstChild);
+  ghost.style.display = 'block';
+
+  document.getElementById('slot-' + idx).classList.add('dragging');
+
+  moveDrag(e);
+  document.addEventListener('mousemove', moveDrag);
+  document.addEventListener('mouseup', endDrag);
+  document.addEventListener('touchmove', moveDrag, { passive: false });
+  document.addEventListener('touchend', endDrag);
+}
+
+function getXY(e) {
+  if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
+}
+
+function moveDrag(e) {
+  if (!isDragging) return;
+  e.preventDefault();
+  const { x, y } = getXY(e);
+  const ghost = document.getElementById('drag-ghost');
+  ghost.style.left = x + 'px';
+  ghost.style.top = y + 'px';
+
+  clearHighlights();
+  const placed = getBoardPos(x, y);
+  if (placed) {
+    highlightCells(placed.row, placed.col, pieces[dragPieceIdx].shape, canPlace(placed.row, placed.col, pieces[dragPieceIdx].shape));
+  }
+}
+
+function endDrag(e) {
+  if (!isDragging) return;
+  isDragging = false;
+  document.removeEventListener('mousemove', moveDrag);
+  document.removeEventListener('mouseup', endDrag);
+  document.removeEventListener('touchmove', moveDrag);
+  document.removeEventListener('touchend', endDrag);
+
+  document.getElementById('drag-ghost').style.display = 'none';
+  clearHighlights();
+
+  const { x, y } = e.changedTouches ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY } : { x: e.clientX, y: e.clientY };
+  const placed = getBoardPos(x, y);
+  if (placed && canPlace(placed.row, placed.col, pieces[dragPieceIdx].shape)) {
+    placePiece(dragPieceIdx, placed.row, placed.col);
+  } else {
+    document.getElementById('slot-' + dragPieceIdx).classList.remove('dragging');
+  }
+  dragPieceIdx = -1;
+}
+
+function getBoardPos(cx, cy) {
+  if (dragPieceIdx < 0) return null;
+  const shape = pieces[dragPieceIdx].shape;
+  const gridEl = document.getElementById('grid');
+  const rect = gridEl.getBoundingClientRect();
+  const cellSize = (rect.width - 20) / COLS;
+  const gx = cx - rect.left - 10;
+  const gy = cy - rect.top - 10;
+  const col = Math.floor(gx / cellSize) - dragOffsetCol;
+  const row = Math.floor(gy / cellSize) - dragOffsetRow;
+  return { row, col };
+}
+
+function canPlace(startRow, startCol, shape) {
+  for (let r = 0; r < shape.length; r++) {
+    for (let c = 0; c < shape[r].length; c++) {
+      if (!shape[r][c]) continue;
+      const br = startRow + r, bc = startCol + c;
+      if (br < 0 || br >= ROWS || bc < 0 || bc >= COLS) return false;
+      if (board[br][bc] >= 0) return false;
+    }
+  }
+  return true;
+}
+
+function highlightCells(startRow, startCol, shape, valid) {
+  hoverCells = [];
+  for (let r = 0; r < shape.length; r++) {
+    for (let c = 0; c < shape[r].length; c++) {
+      if (!shape[r][c]) continue;
+      const cell = getCell(startRow + r, startCol + c);
+      if (cell) {
+        cell.classList.add(valid ? 'highlight' : 'invalid-highlight');
+        hoverCells.push(cell);
+      }
+    }
+  }
+}
+
+function clearHighlights() {
+  hoverCells.forEach(c => c.classList.remove('highlight', 'invalid-highlight'));
+  hoverCells = [];
+}
+
+// ─── PLACE PIECE ─────────────────────────────────────────────────────────────
+function placePiece(idx, startRow, startCol) {
+  const piece = pieces[idx];
+  const shape = piece.shape;
+  for (let r = 0; r < shape.length; r++) {
+    for (let c = 0; c < shape[r].length; c++) {
+      if (!shape[r][c]) continue;
+      board[startRow + r][startCol + c] = piece.color;
+      const cell = getCell(startRow + r, startCol + c);
+      if (cell) {
+        cell.className = 'cell filled c' + piece.color + ' pop-in';
+      }
+    }
+  }
+
+  // Count filled squares
+  let filled = 0;
+  for (let r = 0; r < shape.length; r++)
+    for (let c = 0; c < shape[r].length; c++)
+      if (shape[r][c]) filled++;
+  score += filled;
+
+  pieces[idx] = null;
+  document.getElementById('slot-' + idx).classList.add('used');
+
+  setTimeout(() => clearLines(startRow, startCol, shape), 200);
+}
+
+// ─── CLEAR LINES ─────────────────────────────────────────────────────────────
+function clearLines(startRow, startCol, shape) {
+  const rowsToClear = new Set();
+  const colsToClear = new Set();
+
+  for (let r = 0; r < ROWS; r++) {
+    if (board[r].every(v => v >= 0)) rowsToClear.add(r);
+  }
+  for (let c = 0; c < COLS; c++) {
+    if (board.every(row => row[c] >= 0)) colsToClear.add(c);
+  }
+
+  const totalLines = rowsToClear.size + colsToClear.size;
+  if (totalLines === 0) {
+    combo = 0;
+    updateCombo();
+    checkAllUsed();
+    return;
+  }
+
+  combo++;
+  updateCombo();
+
+  // Animate clearing
+  rowsToClear.forEach(r => {
+    for (let c = 0; c < COLS; c++) {
+      const cell = getCell(r, c);
+      if (cell) cell.classList.add('clearing');
+    }
+  });
+  colsToClear.forEach(c => {
+    for (let r = 0; r < ROWS; r++) {
+      const cell = getCell(r, c);
+      if (cell) cell.classList.add('clearing');
+    }
+  });
+
+  setTimeout(() => {
+    rowsToClear.forEach(r => {
+      for (let c = 0; c < COLS; c++) board[r][c] = -1;
+    });
+    colsToClear.forEach(c => {
+      for (let r = 0; r < ROWS; r++) board[r][c] = -1;
+    });
+
+    // Score
+    const baseScore = totalLines * COLS * 10;
+    const comboBonus = Math.max(1, combo) * baseScore;
+    score += comboBonus;
+    showScorePopup(comboBonus, startRow, startCol);
+
+    renderBoard();
+    updateScore();
+    checkAllUsed();
+  }, 400);
+}
+
+function checkAllUsed() {
+  if (pieces.every(p => p === null)) {
+    setTimeout(dealPieces, 300);
+  } else {
+    checkGameOver();
+  }
+}
+
+// ─── SCORE & UI ──────────────────────────────────────────────────────────────
+function updateScore() {
+  document.getElementById('score-display').textContent = score;
+  if (score > best) {
+    best = score;
+    localStorage.setItem('bb_best', best);
+  }
+  document.getElementById('best-display').textContent = best;
+}
+
+function updateCombo() {
+  document.getElementById('combo-display').textContent = 'x' + (combo || 1);
+  document.getElementById('combo-bar').style.width = Math.min(combo * 15, 100) + '%';
+}
+
+function showScorePopup(pts, row, col) {
+  const grid = document.getElementById('grid');
+  const rect = grid.getBoundingClientRect();
+  const cellSize = (rect.width - 20) / COLS;
+  const popup = document.createElement('div');
+  popup.className = 'score-popup' + (combo > 1 ? ' combo-popup' : '');
+  popup.textContent = (combo > 1 ? 'COMBO x' + combo + '  ' : '') + '+' + pts;
+  popup.style.left = (col * cellSize + 10) + 'px';
+  popup.style.top = (row * cellSize + 10) + 'px';
+  const wrap = document.querySelector('.grid-container');
+  wrap.appendChild(popup);
+  setTimeout(() => popup.remove(), 1000);
+}
+
+// ─── GAME OVER ───────────────────────────────────────────────────────────────
+function checkGameOver() {
+  const available = pieces.filter(p => p !== null);
+  for (const piece of available) {
+    for (let r = 0; r <= ROWS - piece.shape.length; r++) {
+      for (let c = 0; c <= COLS - piece.shape[0].length; c++) {
+        if (canPlace(r, c, piece.shape)) return; // still moves
+      }
+    }
+  }
+  // No moves
+  setTimeout(() => {
+    document.getElementById('over-score').textContent = 'SCORE: ' + score;
+    document.getElementById('overlay').classList.add('active');
+  }, 500);
+}
+
+// ─── START ───────────────────────────────────────────────────────────────────
+document.getElementById('best-display').textContent = best;
+startGame();
+</script>
+</body>
+</html>
